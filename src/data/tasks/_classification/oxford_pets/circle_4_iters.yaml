@@ -1,0 +1,64 @@
+task: "oxford_pets_circle_4_iters"
+
+doc_to_text: !function assets/_oxford_pets_utils.doc_to_text_multi_round
+output_type: generate_until_multi_round
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompts:
+      - "Your task is to identify the *broad semantic category* of the main object in each image.\nAnswer concisely with one or two words only, such as \"animal\", \"vehicle\", \"fruit\", \"tool\".\nAnswer:"
+      - "Task: Using the context to infer what distinctions matter within this domain, refine the label for the TARGET image accordingly.\nLabel: "
+      - "Task:\nClassify the TARGET image using the context to guide what level of specificity to use.\nProduce a label that fits naturally among the context labels."
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 64
+  do_sample: False
+  rag:
+    0:
+      enabled: True
+      database_path: "oxford_pets/train/openai-clip-vit-base-patch32"
+      model_name: "openai/clip-vit-base-patch32"
+      prompt: "<images>"
+      database_format: "pt"
+      search_modality: "random"
+      grab_data_type: "image"
+      format: "no-text"
+      num_samples: 16
+      separate_queries: True
+      cache_and_reuse: True
+
+      gen_batch_size: 4
+    1:
+      enabled: True
+      pipe_from: -1
+      separate_queries: True
+      format: "all-image-answer-pairs"
+      context_prompt: "You are performing open-world visual classification with iterative refinement.\nYou are given a small set of image-label pairs that belong to the *same unknown domain*.\nYour goal is to infer what kind of distinctions matter within this domain and refine the label of a target image accordingly.\n\nGuidelines:\n- Assume all examples belong to a coherent category space (they share a theme).\n- Look for visual patterns that differ among examples (shape, texture, color, part structure).\n- \"Refine\" means making the target label more specific *within the apparent domain* inferred from context, not globally (avoid generic words like \"vehicle\" or \"object\").\n- Do not simply repeat the previous label; add or substitute information that makes it more discriminative among the context samples.\n- Keep the label concise: usually one or two words.\n\nContext examples (from previous iteration):"
+      prompt: "Current labels: {}\n"
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      prompt_for_sample: "Current labels: {}\n"
+      keep_label_for_hot_image: True
+      keep_full_history: True
+      concatenate_labels: ", "
+      clean_output_labels: True
+      circular: True
+      max_iters: 4
+      cache_and_reuse: True
+      gen_batch_size: 4
+
+      resize_images: 224
+    2:
+      enabled: True
+      pipe_from: 1
+      prompt: "You are an open-world visual classifier.\nYou will see a small set of image-label pairs that belong to the same unknown domain.\nUse them to infer what kinds of distinctions matter in this domain (e.g., texture patterns, object subtypes, material differences, color or shape features).\n\nYour task is to classify a new image from the same domain.\nMatch the level of specificity shown in the context labels.\nAvoid generic words such as \"object\", \"thing\", \"vehicle\", \"animal\", \"texture\" unless they are the most specific category possible\n\nAnswer concisely with one or two words.\n<images>Label: {}"
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      keep_full_history: True
+      concatenate_labels: ", "
+      format: "interleaved"
+      include_image: True
+
+      resize_images: 224
+      clean_answer: True
+include: assets/_default_template_yaml

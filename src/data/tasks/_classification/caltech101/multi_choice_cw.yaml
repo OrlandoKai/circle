@@ -1,0 +1,22 @@
+task: "caltech101_multi_choice_cw"
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: "Answer:"
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 64
+  do_sample: False
+
+  rag:
+    enabled: True
+    database_path: cc12m/openai_ViT-B-32/index
+    model_name: openai/clip-vit-base-patch32
+    prompt: "What object is in the photo?\n{}"
+    search_modality: "target-classes"
+    grab_data_type: "text"
+    format: "bullet-list-captions"
+    position: "post-sample"
+include: assets/_default_template_yaml

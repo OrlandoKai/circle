@@ -1,0 +1,11 @@
+task: "eurosat_embed_train"
+
+test_split: train
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: ""
+    post_prompt: ""
+
+include: assets/_default_template_yaml
