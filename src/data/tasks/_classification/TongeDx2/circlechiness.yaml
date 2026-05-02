@@ -1,0 +1,118 @@
+task: "tongedx2_circlechiness"
+
+doc_to_text: !function assets/_tongedx2_utils.doc_to_text_multi_round
+output_type: generate_until_multi_round
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompts:
+      - |
+        你是一名中医望诊（舌诊）检查诊断专家。
+
+        你的任务是利用参考样本校准诊断标准，并分析目标舌像的病理特征。
+
+        1. 语境校准
+        观察参考样本，推断当前数据集内各特征的判定阈值（例如 FurThick 的厚度阈值）。
+        确保你的判断标准与参考样本中使用的标准一致。
+
+        2. 特征检测
+        请聚焦以下 8 个特征：
+        TonguePale, TipSideRed, Spot, Ecchymosis, Crack, Toothmark, FurThick, FurYellow.
+
+        3. 输出约定
+        - 仅输出 8 个数字（0 或 1），数字之间用单个空格分隔。
+        - 0 = 阴性/不存在，1 = 阳性/存在。
+        - 不要输出解释、标点或任何额外文本。
+
+        必须按固定顺序输出：
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+      - |
+        请基于检索到的上下文样本进一步细化判断，并在整个样本集合中保持判定标准一致。
+        仅输出 8 个数字，数字之间用单个空格分隔，顺序如下：
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+      - |
+        请给出目标舌像的最终严格二分类结果。
+        仅输出 8 个数字，数字之间用单个空格分隔，且顺序必须完全如下：
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 12
+  do_sample: False
+  resize_input_image: 384
+  rag:
+    0:
+      enabled: True
+      database_path: "tongedx2/test/openai-clip-vit-base-patch32"
+      model_name: "openai/clip-vit-base-patch32"
+      prompt: "<images>"
+      database_format: "pt"
+      search_modality: "random"
+      grab_data_type: "image"
+      format: "no-text"
+      num_samples: 8
+      separate_queries: True
+      cache_and_reuse: True
+
+      gen_batch_size: 8
+    1:
+      enabled: True
+      pipe_from: -1
+      separate_queries: True
+      format: "all-image-answer-pairs"
+      context_prompt: |
+        你正在执行一个基于迭代优化的中医舌诊多标签分类任务。
+        你将获得一小组舌像-标签样本对，这些样本都属于同一中医诊断语境。
+
+        你的目标是识别在该语境下具有区分性的舌象特征（如颜色、形态、苔质等），
+        并据此准确预测目标舌像的 8 个二值属性。
+
+        指南：
+        - 假设所有样本都属于统一的中医诊断空间，且特征定义一致。
+        - 识别关键区分模式，如舌色偏淡与暗紫、齿痕与裂纹、苔厚薄、苔色偏黄等。
+        - 只做明确二值判断（0 阴性/不存在，1 阳性/存在）。
+        - 不要机械复制上下文标签；请独立判断目标图像。
+        - 输出格式必须严格：按固定顺序输出 8 个数字，数字之间单空格分隔。
+
+        上下文样本（来自上一轮）：
+      prompt: "Current predictions: {}\n"
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      prompt_for_sample: "Current predictions: {}\n"
+      keep_label_for_hot_image: True
+      keep_full_history: True
+      concatenate_labels: ", "
+      clean_output_labels: False
+      circular: True
+      max_iters: 2
+      cache_and_reuse: True
+      gen_batch_size: 8
+
+      resize_images: 224
+    2:
+      enabled: True
+      pipe_from: 1
+      prompt: |
+        请利用给定样本校准诊断标准，并推断当前语境下各特征的判定阈值
+        （例如 FurThick 的阈值，或 TonguePale 的颜色边界）。
+
+        然后对目标舌像的以下 8 个特征进行严格二分类：
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+
+        输出规范：
+        - 仅输出 8 个数字（0 或 1），数字之间用单个空格分隔。
+        - 顺序必须严格为：TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow。
+        - 不要输出解释、标点、Markdown 或任何额外文本。
+
+        <images>Prediction: {}
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      keep_full_history: True
+      concatenate_labels: ", "
+      format: "interleaved"
+      include_image: True
+
+      resize_images: 224
+      clean_answer: False
+
+include: assets/_default_template_yaml
+

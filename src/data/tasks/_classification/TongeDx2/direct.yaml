@@ -1,0 +1,28 @@
+task: "tongedx2_direct"
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: |
+      You are an expert tongue diagnosis assistant.
+      Analyze only the target tongue image and predict 8 binary attributes.
+
+      Output must contain exactly 8 digits separated by single spaces, in this order:
+      TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+
+      Rules:
+      - Use only 0 or 1 for each attribute.
+      - 0 means absent/negative, 1 means present/positive.
+      - Do not output any other text.
+
+      Example:
+      1 0 0 0 0 0 1 0
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 48
+  do_sample: False
+  resize_input_image: 384
+
+include: assets/_default_template_yaml
+

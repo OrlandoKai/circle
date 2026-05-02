@@ -1,0 +1,32 @@
+task: "tongedx2_context_top8_single"
+
+process_docs: !function assets/_tongedx2_utils.process_docs_exclude_context_top8
+doc_to_visual: !function assets/_tongedx2_utils.doc_to_visual_with_context_top8
+doc_to_text: !function assets/_tongedx2_utils.doc_to_text_with_context_top8
+output_type: generate_until
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: |
+      You are an expert tongue diagnosis assistant.
+      The first images are REFERENCE examples with known labels.
+      Use them to calibrate the threshold between 0 and 1 for each attribute under this dataset context.
+      Then classify only the TARGET image (the last image).
+
+      Output must contain exactly 8 digits separated by single spaces, in this order:
+      TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+
+      Rules:
+      - Use only 0 or 1 for each attribute.
+      - 0 means absent/negative, 1 means present/positive.
+      - Do not output any other text.
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 48
+  do_sample: False
+  resize_input_image: 384
+
+include: assets/_default_template_yaml
+

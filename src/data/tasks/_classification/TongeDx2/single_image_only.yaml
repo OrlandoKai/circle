@@ -1,0 +1,17 @@
+task: "tongedx2_single_image_only"
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: |
+      你是专业的舌诊辅助助手。
+      仅观察目标图片本身，不使用任何参考或先验信息。
+      请判断该舌象是否符合“舌色淡白（TonguePale）”的特征。
+      输出可以自由表达，不需要固定格式。
+    post_prompt: ""
+
+doc_to_target: !function assets/_tongedx2_utils.doc_to_target_dummy
+metric_list: []
+
+include: assets/_default_template_yaml
+

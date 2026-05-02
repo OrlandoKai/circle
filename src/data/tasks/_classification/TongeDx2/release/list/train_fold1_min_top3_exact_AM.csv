@@ -1,0 +1,7 @@
+﻿id,Gender,Age,TonguePale,TipSideRed,Spot,Ecchymosis,Crack,Toothmark,FurThick,FurYellow,Age_Group,image_path
+741,F,63,1,1,0,0,0,0,1,0,Adult,0001_1000/741_2.jpg
+1950,M,81,1,0,1,1,1,0,1,1,Elderly,1001_2000/1950_1.jpg
+2022,F,56,1,0,0,1,1,0,1,1,Adult,2001_3000/2022_1.jpg
+2551,F,43,0,0,0,1,1,1,0,1,Adult,2001_3000/2551_1.jpg
+3674,M,41,0,1,1,0,0,1,0,0,Adult,3001_4000/3674_1.jpg
+4409,F,47,0,1,1,0,0,1,0,0,Adult,4001_5000/4409_1.jpg

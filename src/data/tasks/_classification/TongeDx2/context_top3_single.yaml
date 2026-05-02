@@ -1,0 +1,57 @@
+task: "tongedx2_context_top3_single"
+
+process_docs: !function assets/_tongedx2_utils.process_docs_exclude_context_top3
+doc_to_visual: !function assets/_tongedx2_utils.doc_to_visual_with_context_top3
+doc_to_text: !function assets/_tongedx2_utils.doc_to_text_with_context_top3
+output_type: generate_until
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: |
+      你是专业的舌诊辅助助手。
+      
+
+      你将收到多张图片：
+      - 前6张图片为**带有已知标签的参考示例**。
+      - 最后一张图片为**需要分类的目标图片**。
+
+      你的任务：
+      1）基于6张参考图片以及对应的八位0/1值，用中文总结8个属性各自对应的关键正负视觉特征。
+      2）依据上述特征，用中文对目标图片进行分析。
+      3）输出目标图片最终的8位预测结果。
+
+      仅通过参考图片来标定该数据集中每个属性0/1对应的视觉标准。
+      禁止直接复制参考标签向量。
+      禁止对参考标签采用多数投票方式判定。
+      禁止某个属性的判定结果影响其他属性。
+
+      属性（固定顺序）：
+      舌色淡白 舌尖舌侧发红 瘀点 瘀斑 舌裂纹 齿痕 舌苔厚 舌苔黄
+
+      判定规则（各属性独立判定）：
+      1）最终判定仅依据目标图片本身。
+      2）仅当目标图片存在清晰正向视觉特征时，输出1。
+      3）若无特征、特征微弱、无法确定或不可见，输出0。
+      4）若画质/角度导致某属性特征无法辨别，该属性输出0。
+
+      防固定套用规则：
+      - 禁止直接照搬参考标签语句作为预测内容。
+      - 每一张目标图片都需独立重新评估全部8个属性。
+      - 不同样本预测结果可不同，不得使用固定模板套用。
+
+      严格输出格式：
+      - 首先输出中文分析内容，包含两部分：
+        A) 参考总结：归纳6张参考图中每个属性的正负视觉特征。
+        B) 目标分析：对照参考特征分析目标图片。
+      - 最后一行必须为最终预测：恰好8位数字，单个空格分隔。
+      - 每位数字只能为0或1。
+      - 最后一行不得添加任何多余字符。
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 48
+  do_sample: False
+  resize_input_image: 384
+
+include: assets/_default_template_yaml

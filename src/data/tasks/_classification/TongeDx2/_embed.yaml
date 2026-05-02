@@ -1,0 +1,18 @@
+task: "tongedx2_embed_test"
+
+dataset_path: data/tongedx2
+dataset_kwargs:
+  custom_download: !function assets/_tongedx2_utils.download
+  load_from_disk: true
+  token: true
+
+test_split: test
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompt: ""
+    post_prompt: ""
+
+include: assets/_default_template_yaml
+

@@ -1,0 +1,120 @@
+task: "tongedx2_circle"
+
+doc_to_text: !function assets/_tongedx2_utils.doc_to_text_multi_round
+output_type: generate_until_multi_round
+
+model_specific_kwargs:
+  default:
+    pre_prompt: ""
+    prompts:
+      - |
+        You are an expert in inspection diagnosis of traditional Chinese medicine (TCM).
+
+        Your task is to calibrate diagnostic criteria using reference samples and analyze the pathological features of the target tongue image.
+
+        1. Context Calibration
+        Observe the reference samples and infer the defining thresholds for features in the current dataset (for example, the thickness threshold for FurThick).
+        Ensure your judgment criteria are consistent with those used in the reference samples.
+
+        2. Feature Detection
+        Focus on detecting the following 8 features:
+        TonguePale, TipSideRed, Spot, Ecchymosis, Crack, Toothmark, FurThick, FurYellow.
+
+        3. Output Contract
+        - Output only 8 digits (0 or 1), separated by single spaces.
+        - 0 = absent/negative, 1 = present/positive.
+        - Do not output explanations, punctuation, or extra text.
+
+        Output in this fixed order:
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+      - |
+        Refine your diagnosis using the retrieved context examples and keep criterion consistency across the set.
+        Output only 8 digits separated by single spaces in this order:
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+      - |
+        Return the final strict binary decision for the TARGET tongue image.
+        Output only 8 digits separated by single spaces in this exact order:
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+    post_prompt: ""
+
+generation_kwargs:
+  max_new_tokens: 12
+  do_sample: False
+  resize_input_image: 384
+  rag:
+    0:
+      enabled: True
+      database_path: "tongedx2/test/openai-clip-vit-base-patch32"
+      model_name: "openai/clip-vit-base-patch32"
+      prompt: "<images>"
+      database_format: "pt"
+      search_modality: "image"
+      grab_data_type: "image"
+      format: "no-text"
+      num_samples: 8
+      separate_queries: True
+      cache_and_reuse: False
+      reset_cache: 1
+
+      gen_batch_size: 8
+    1:
+      enabled: True
+      pipe_from: -1
+      separate_queries: True
+      format: "all-image-answer-pairs"
+      context_prompt: |
+        You are performing a multi-label classification task for traditional Chinese medicine (TCM) tongue diagnosis, based on iterative refinement.
+        You are provided with a small set of tongue image-label pairs that all belong to the same TCM diagnostic context.
+
+        Your goal is to infer which tongue features (such as color, shape, and coating texture) are critical for discrimination within this context,
+        then accurately predict 8 binary attributes for the target tongue image.
+
+        Guidelines:
+        - Assume all examples belong to a unified TCM diagnostic space with consistent feature definitions.
+        - Identify distinguishing visual patterns such as pale vs. dark purplish color, toothmarks, cracks, coating thickness, and yellow coating.
+        - Make explicit binary decisions only (0 absent/negative, 1 present/positive).
+        - Do not copy labels from context; independently judge the target image.
+        - Output format must stay strict: 8 digits separated by single spaces in fixed order.
+
+        Context examples (from previous iteration):
+      prompt: "Current predictions: {}\n"
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      prompt_for_sample: "Current predictions: {}\n"
+      keep_label_for_hot_image: True
+      keep_full_history: True
+      concatenate_labels: ", "
+      clean_output_labels: False
+      circular: True
+      max_iters: 2
+      cache_and_reuse: False
+      reset_cache: 1
+      gen_batch_size: 8
+
+      resize_images: 224
+    2:
+      enabled: True
+      pipe_from: 1
+      prompt: |
+        Calibrate your diagnostic criteria using the provided samples, and infer defining thresholds for features in the current context
+        (for example, the threshold for FurThick, or the color boundary for TonguePale).
+
+        Then perform strict binary classification for these 8 features on the TARGET tongue image:
+        TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow
+
+        Output specification:
+        - Output only 8 digits (0 or 1), separated by single spaces.
+        - Order must be exactly: TonguePale TipSideRed Spot Ecchymosis Crack Toothmark FurThick FurYellow.
+        - Do not output explanations, punctuation, markdown, or any extra text.
+
+        <images>Prediction: {}
+      end_context_prompt: "===== EXAMPLES END =====\nTARGET:"
+      keep_full_history: True
+      concatenate_labels: ", "
+      format: "interleaved"
+      include_image: True
+
+      resize_images: 224
+      clean_answer: False
+
+include: assets/_default_template_yaml
+
