@@ -275,6 +275,15 @@ def _run_single_evaluation(args: argparse.Namespace) -> tuple[dict, dict] | tupl
     return None, None
 
 
+def _merge_cli_last_layer_probs(args: argparse.Namespace) -> None:
+    gen_kwargs = utils.parse_string_args(args.gen_kwargs)
+    if args.print_last_layer_probs:
+        gen_kwargs["print_last_layer_probs"] = True
+        gen_kwargs["last_layer_probs_topk"] = args.last_layer_probs_topk
+        gen_kwargs["last_layer_probs_max_samples"] = args.last_layer_probs_max_samples
+    args.gen_kwargs = ",".join(f"{key}={value}" for key, value in gen_kwargs.items()) if gen_kwargs else ""
+
+
 def main(args: argparse.Namespace) -> None:
     """Evaluate model on tasks.
 
@@ -330,6 +339,7 @@ def main(args: argparse.Namespace) -> None:
 
     for args in args_list:
         try:
+            _merge_cli_last_layer_probs(args)
             # Set the same start timestamp for everybody
             args.datetime_str = accelerator.gather_for_metrics(
                 [utils.get_datetime_str(timezone=args.timezone)], use_gather_object=True
@@ -518,6 +528,24 @@ if __name__ == "__main__":
             "String arguments for model generation on greedy_until tasks,"
             " e.g. `temperature=0,top_k=0,top_p=0`"
         ),
+    )
+    parser.add_argument(
+        "--print_last_layer_probs",
+        action="store_true",
+        default=False,
+        help="If True, print top-k last-layer probabilities during generation.",
+    )
+    parser.add_argument(
+        "--last_layer_probs_topk",
+        type=int,
+        default=5,
+        help="Top-k tokens to show when printing last-layer probabilities.",
+    )
+    parser.add_argument(
+        "--last_layer_probs_max_samples",
+        type=int,
+        default=3,
+        help="Max samples per batch to print/save last-layer probabilities.",
     )
     parser.add_argument(
         "--log_level",

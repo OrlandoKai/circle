@@ -171,3 +171,5 @@ config-diff.json
 # macOS
 .DS_Store
 **/.DS_Store
+
+origin/

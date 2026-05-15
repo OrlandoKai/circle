@@ -829,7 +829,7 @@ class Qwen2VL(Model):
         task: str | None = None,
         split: str | None = None,
         doc_ids: list[int] | None = None,
-    ) -> None:
+    ) -> list[list[dict[str, float | str]] | None] | None:
         scores = getattr(generation_output, "scores", None)
         logits = getattr(generation_output, "logits", None)
         last_step = None
@@ -838,22 +838,41 @@ class Qwen2VL(Model):
         elif logits is not None:
             last_step = logits[:, -1, :]
         if last_step is None:
-            return
+            return None
 
         probs = torch.softmax(last_step, dim=-1)
         k = max(1, min(int(topk), probs.shape[-1]))
         top_probs, top_ids = torch.topk(probs, k=k, dim=-1)
 
-        max_rows = min(int(max_samples), top_probs.shape[0])
-        for idx in range(max_rows):
+        topk_data: list[list[dict[str, float | str]]] = []
+        for idx in range(top_probs.shape[0]):
             token_ids = top_ids[idx].detach().cpu().tolist()
             token_probs = top_probs[idx].detach().cpu().tolist()
             tokens = self.tokenizer.convert_ids_to_tokens(token_ids)
-            pairs = ", ".join(
-                f"{tok}:{prob:.6f}" for tok, prob in zip(tokens, token_probs, strict=True)
+            topk_data.append(
+                [
+                    {"token": tok, "prob": float(prob)}
+                    for tok, prob in zip(tokens, token_probs, strict=True)
+                ]
             )
-            tag = f"task={task} split={split} doc_id={doc_ids[idx]}" if doc_ids else ""
-            log.info("Last-layer top-k probs %s -> %s", tag, pairs)
+
+        max_rows = min(int(max_samples), len(topk_data)) if max_samples is not None else len(topk_data)
+        for idx in range(max_rows):
+            tag = (
+                f"task={task} split={split} doc_id={doc_ids[idx]}"
+                if doc_ids and idx < len(doc_ids)
+                else f"task={task} split={split}"
+            )
+            pairs = ", ".join(
+                f"{item['token']}:{item['prob']:.6f}" for item in topk_data[idx]
+            )
+            print(f"[LAST_LAYER] {tag} -> {pairs}", flush=True)
+
+        if max_rows < len(topk_data):
+            for idx in range(max_rows, len(topk_data)):
+                topk_data[idx] = None
+
+        return topk_data
 
     def generate_until(self, requests: list[TaskInstance]) -> list[str]:
         """Generate greedily until a stopping sequence.
@@ -1019,8 +1038,9 @@ class Qwen2VL(Model):
             inputs, generation_output = self._generate(
                 messages, copy.deepcopy(gen_kwargs), copy.deepcopy(rag)
             )
+            last_layer_topk = None
             if gen_kwargs.get("print_last_layer_probs", False):
-                self._print_last_layer_probs(
+                last_layer_topk = self._print_last_layer_probs(
                     generation_output,
                     topk=gen_kwargs.get("last_layer_probs_topk", 5),
                     max_samples=gen_kwargs.get("last_layer_probs_max_samples", 3),
@@ -1052,6 +1072,7 @@ class Qwen2VL(Model):
             for idx, (ans, context) in enumerate(zip(answers, batched_contexts, strict=True)):
                 _ans = TaskSingleOutput(
                     answer=ans,
+                    last_layer_topk_probs=last_layer_topk[idx] if last_layer_topk else None,
                     context=context,
                     context_tokens_count=inputs["attention_mask"][idx].sum(),
                     num_images=images_per_request[idx] if len(images_per_request) > idx else None,
@@ -1377,7 +1398,7 @@ class Qwen2VL(Model):
         return retrieved_data
 
     def generate_until_multi_round(self, requests: list[TaskInstance]) -> list[str]:
-        """Generate greedily until a stopping sequence.
+        """Generate using multiple rounds of interaction.
 
         Args:
         ----
@@ -1391,6 +1412,7 @@ class Qwen2VL(Model):
 
         """
         res = []
+        last_layer_topk_by_round: dict[int, list[list[dict[str, float | str]] | None] | None] = {}
 
         gen_kwargs = requests[0].args[1]
         start_req = gen_kwargs.get("start_req", 0)
@@ -1930,7 +1952,7 @@ class Qwen2VL(Model):
 
                         inputs, generation_output = self._generate(messages, gen_kwargs, rag)
                         if gen_kwargs.get("print_last_layer_probs", False):
-                            self._print_last_layer_probs(
+                            last_layer_topk_by_round[round_idx] = self._print_last_layer_probs(
                                 generation_output,
                                 topk=gen_kwargs.get("last_layer_probs_topk", 5),
                                 max_samples=gen_kwargs.get("last_layer_probs_max_samples", 3),
@@ -2008,8 +2030,18 @@ class Qwen2VL(Model):
 
             answers = list(zip(*batched_round_results, strict=True))
             for idx, (ans, context) in enumerate(zip(answers, batched_contexts, strict=True)):
+                last_layer_topk_probs = None
+                if last_layer_topk_by_round:
+                    round_count = len(batched_round_results)
+                    per_round = []
+                    for round_idx in range(round_count):
+                        round_data = last_layer_topk_by_round.get(round_idx)
+                        per_round.append(round_data[idx] if round_data is not None else None)
+                    last_layer_topk_probs = per_round
+
                 _ans = TaskSingleOutput(
                     answer=ans,
+                    last_layer_topk_probs=last_layer_topk_probs,
                     context=context,
                     context_tokens_count=context_tokens_count[idx]
                     if context_tokens_count is not None

@@ -289,6 +289,11 @@ def evaluate(
                     rag_random_sample_filenames = [x[0] for x in rag_filename_target_pairs]
                     rag_random_sample_targets = [x[1] for x in rag_filename_target_pairs]
 
+                    last_layer_topk_probs = [
+                        [getattr(resp, "last_layer_topk_probs", None) for resp in req.resps]
+                        for req in requests
+                    ]
+
                     example = {
                         "doc_id": doc_id,
                         "doc": saved_doc,
@@ -296,6 +301,7 @@ def evaluate(
                         "arguments": filtered_arguments,
                         "resps": [req.resps for req in requests],
                         "filtered_resps": [req.filtered_resps[filter_key] for req in requests],
+                        "last_layer_topk_probs": last_layer_topk_probs,
                         "doc_hash": utils.hash_string(
                             json.dumps(
                                 requests[0].doc,

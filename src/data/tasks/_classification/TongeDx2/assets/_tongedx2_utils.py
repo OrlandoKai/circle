@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -157,13 +158,19 @@ def _doc_to_text_with_context(doc: dict, model_specific_kwargs: dict, context_cs
     post_prompt = model_specific_kwargs.get("post_prompt", "")
 
     if rows:
-        label_lines = [f"Reference {idx + 1}: {label}" for idx, (_, label) in enumerate(rows)]
+        label_lines = [
+            f"Image {idx + 1}: Label: {label}" for idx, (_, label) in enumerate(rows)
+        ]
         context_block = (
-            "Reference labels for the first {} image(s), in order:\n{}\n\n"
-            "The last image is the TARGET image and has no label."
-        ).format(len(rows), "\n".join(label_lines))
+            "Interleaved image-label reference list (images are provided in the same order):\n"
+            "{}\n\n"
+            "Image {}: TARGET"
+        ).format("\n".join(label_lines), len(rows) + 1)
     else:
-        context_block = "No reference samples remain after excluding TARGET overlap. Classify only the TARGET image."
+        context_block = (
+            "No reference samples remain after excluding TARGET overlap.\n"
+            "Image 1: TARGET"
+        )
 
     return pre_prompt + prompt + "\n\n" + context_block + post_prompt
 
@@ -304,29 +311,13 @@ def _build_target_string(row: pd.Series) -> str:
     return " ".join(str(v) for v in values)
 
 
-def download(output_dir: str = "data", cache_dir: str = ".cache") -> datasets.DatasetDict:
-    """Build a local HuggingFace dataset from train_fold1 + val_fold1 CSV files."""
-    _ = cache_dir  # Unused, kept for API compatibility with other tasks.
-
-    task_root = Path(__file__).resolve().parents[1]
-    list_root = task_root / "release" / "list"
-
-    output_path = Path(output_dir) / "tongedx2"
-    if output_path.exists():
-        return
-
-    split_files = [list_root / "train_fold1.csv", list_root / "val_fold1.csv"]
+def _dataset_from_csv(csv_file: Path, image_index: dict[str, str], task_root: Path) -> datasets.Dataset:
     required_cols = ["image_path", *ATTRIBUTES]
 
-    data_frames = []
-    for csv_file in split_files:
-        if not csv_file.exists():
-            raise FileNotFoundError(f"Missing required file: {csv_file}")
-        data_frames.append(pd.read_csv(csv_file, usecols=required_cols))
+    if not csv_file.exists():
+        raise FileNotFoundError(f"Missing required file: {csv_file}")
 
-    df = pd.concat(data_frames, ignore_index=True)
-
-    image_index = _build_image_index(str(task_root))
+    df = pd.read_csv(csv_file, usecols=required_cols)
     image_keys = df["image_path"].astype(str).map(_normalize_image_key)
     missing_mask = ~image_keys.isin(image_index.keys())
     if missing_mask.any():
@@ -345,6 +336,34 @@ def download(output_dir: str = "data", cache_dir: str = ".cache") -> datasets.Da
         .tolist()
     )
 
-    dataset = datasets.Dataset.from_dict({"visual": visuals, "target": targets})
-    data = datasets.DatasetDict({"test": dataset})
+    return datasets.Dataset.from_dict({"visual": visuals, "target": targets})
+
+
+def download(output_dir: str = "data", cache_dir: str = ".cache") -> datasets.DatasetDict:
+    """Build local HuggingFace splits for TongeDx2."""
+    _ = cache_dir  # Unused, kept for API compatibility with other tasks.
+
+    task_root = Path(__file__).resolve().parents[1]
+    list_root = task_root / "release" / "list"
+
+    output_path = Path(output_dir) / "tongedx2"
+    if output_path.exists():
+        return
+
+    image_index = _build_image_index(str(task_root))
+    support_dataset = _dataset_from_csv(
+        list_root / "train_fold1.csv", image_index, task_root
+    )
+    val_dataset = _dataset_from_csv(list_root / "val_fold1.csv", image_index, task_root)
+    test_dataset = _dataset_from_csv(list_root / "test.csv", image_index, task_root)
+
+    data = datasets.DatasetDict(
+        {
+            "support": support_dataset,
+            "train": support_dataset,
+            "val": val_dataset,
+            "test": test_dataset,
+        }
+    )
     data.save_to_disk(output_path)
+你是不是

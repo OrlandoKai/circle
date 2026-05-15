@@ -1,4 +1,4 @@
-task: "tongedx2_embed_test"
+task: "tongedx2_embed_support"
 
 dataset_path: data/tongedx2
 dataset_kwargs:
@@ -6,8 +6,8 @@ dataset_kwargs:
   load_from_disk: true
   token: true
 
-test_split: test
-
+test_split: support
+#大
 model_specific_kwargs:
   default:
     pre_prompt: ""

@@ -16,6 +16,14 @@ class TaskSingleOutput(BaseModel):
     """
     answer: str | list[list[str] | str]
 
+    """Optional top-k last-layer probabilities for the generated step.
+    """
+    last_layer_topk_probs: (
+        list[dict[str, float | str]]
+        | list[list[dict[str, float | str]]]
+        | None
+    ) = None
+
     """The (textual) context used by the model to generate the answer.
     """
     context: str | None = None
